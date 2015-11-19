@@ -1,7 +1,6 @@
 // RTOS Framework for Project 1
 // Fall 2014
-// All rights @
-// Fahad Mirza
+// Jason Losh
 
 //-----------------------------------------------------------------------------
 // Objectives and notes             
@@ -162,7 +161,7 @@ int create_process(_fn fn, int priority)
   int ok = FALSE;
   int i = 0;
   int found = FALSE;
-  //IEC0bits.T3IE = 0; 
+  IEC0bits.T3IE = 0; 
   // save starting address if room in task list
   if (task_count < MAX_TASKS)
   {
@@ -189,7 +188,7 @@ int create_process(_fn fn, int priority)
       ok = TRUE;
     }
   }
-  //IEC0bits.T3IE = 1;
+  IEC0bits.T3IE = 1;
   return ok;
 }
 
@@ -245,19 +244,26 @@ void rtos_start()
 
 	IFS0bits.T3IF = 0;		// Clear the flag
 	IEC0bits.T3IE = 1;		// Enable timer 3 interrupts
-	
+	T3CONbits.TON = 1;		// Timer3 ON
   	(*fn)();				// Call the first task
 }
 
 
 
 /* #################################################################################### */
-void __attribute__(( no_auto_psv)) _T3Interrupt (void)
+void __attribute__((interrupt, no_auto_psv)) _T3Interrupt (void)
 {	
 	int task_previous;
 
 	if(rtos_mode == MODE_PREEMPTIVE)
 	{
+		asm("ulnk");
+    	asm("POP.D W6");
+		asm("POP.D W4");
+    	asm("POP.D W2");
+    	asm("POP.D W2");
+     	asm("POP RCOUNT");
+     	asm("lnk #0x6");
 		asm("PUSH CORCON");
 		asm("PUSH SR");
 		asm("PUSH DCOUNT");
@@ -322,6 +328,7 @@ void __attribute__(( no_auto_psv)) _T3Interrupt (void)
 			_fn fn;
 			fn = (_fn)tcb[task_current].pid;
 			tcb[task_current].state = STATE_READY;
+			SRbits.IPL = 0;
 	  		(*fn)();
 		}
 		else
@@ -553,7 +560,7 @@ void timer3_init(unsigned int period)
   // Clock timer 3 with internal 40/64 MHz clock 
   T3CONbits.TCS = 0;	// Select Fcy
   T3CONbits.TCKPS = 2;	// Prescaler 64
-  T3CONbits.TON = 1;
+  //T3CONbits.TON = 1;	// Timer on. Done in RTOS_START 
   PR3 = period;
   IFS0bits.T3IF = 0;	// Clear the flag
   //IEC0bits.T3IE = 1;	// Enable timer 3 interrupts  [this is done in RTOS_START function] 
@@ -732,23 +739,26 @@ int main(void)
 
   // initialize selected RTOS
   ok = FALSE;
-//  while (!ok)
-//  {
-//    pb = read_pbs();
-//    if (pb & 4) 
-//    {
-//      	ok = TRUE;
-//      	rtos_init(MODE_COOPERATIVE);
-//		while(read_pbs() & 4);			// wait till button release
-//    }
-//    if (pb & 8) 
-//    {
-//      	ok = TRUE;
-//      	rtos_init(MODE_PREEMPTIVE);
-//		while(read_pbs() & 8);			// wait till button release
-//    }
-//  }
-	rtos_init(MODE_COOPERATIVE);
+  while (!ok)
+  {
+    pb = read_pbs();
+    if (pb & 4) 
+    {
+      	ok = TRUE;
+      	rtos_init(MODE_COOPERATIVE);
+		while(read_pbs() & 4);			// wait till button release
+    }
+    if (pb & 8) 
+    {
+      	ok = TRUE;
+      	rtos_init(MODE_PREEMPTIVE);
+		while(read_pbs() & 8)			// wait till button release
+		{
+			__delay32(400000);
+		}
+    }
+  }
+
   // add required idle process
   ok =  create_process(idle, 0) > 0;
 
@@ -760,8 +770,6 @@ int main(void)
   ok &= create_process(debounce, 4) > 0;
   ok &= create_process(uncooperative, 2) > 0;
 
-
-__delay32(28080);
   // start up rtos
   if (ok) 
     rtos_start(); // never returns
