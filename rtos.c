@@ -1,6 +1,6 @@
-// RTOS Framework for Project 1
-// Fall 2014
-// Jason Losh
+// Brief: RTOS Framework for Project 1
+// Date: Fall 2014
+// Author: Fahad Mirza
 
 //-----------------------------------------------------------------------------
 // Objectives and notes             
